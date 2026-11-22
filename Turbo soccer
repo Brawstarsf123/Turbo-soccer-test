@@ -1,7 +1,7 @@
 
--- NEON TURBO SOCCER V3
--- Separate ball tracking, trajectory and landing prediction.
--- Experimental client-side visuals.
+-- NEON TURBO SOCCER V2
+-- Ball tracker + curved trajectory + landing predictor
+-- Visual prediction only. Does not control the car.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -10,17 +10,32 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Cleanup previous version
-local old = playerGui:FindFirstChild("NeonTurbo")
-if old then old:Destroy() end
-
+-- Cleanup old version
 for _, name in ipairs({
-    "NeonPredictionV3",
-    "NeonLandingV3"
+    "NeonTurbo",
+    "NeonBallPrediction",
+    "NeonLandingCircle",
+    "NeonTrajectory"
 }) do
-    local existing = Workspace:FindFirstChild(name)
-    if existing then existing:Destroy() end
+    local old = playerGui:FindFirstChild(name)
+    if old then old:Destroy() end
+
+    local worldOld = Workspace:FindFirstChild(name)
+    if worldOld then worldOld:Destroy() end
 end
+
+local oldFolder = Workspace:FindFirstChild("NeonTrajectory")
+if oldFolder then oldFolder:Destroy() end
+
+-- Settings
+local toggles = {
+    ["Auto Score"] = false,
+    ["Auto Save"] = false,
+    ["Auto Air-Dribble"] = false,
+    ["Ball Tracker"] = false,
+    ["Ball Prediction"] = false,
+    ["Landing Predictor"] = false
+}
 
 -- GUI
 local gui = Instance.new("ScreenGui")
@@ -29,47 +44,103 @@ gui.ResetOnSpawn = false
 gui.Parent = playerGui
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.fromOffset(275, 245)
-frame.Position = UDim2.new(0.5, -137, 0.5, -122)
-frame.BackgroundColor3 = Color3.fromRGB(18, 12, 35)
+frame.Size = UDim2.fromOffset(275, 365)
+frame.Position = UDim2.new(0.5, -137, 0.5, -182)
+frame.BackgroundColor3 = Color3.fromRGB(15, 10, 30)
 frame.Parent = gui
 
-Instance.new("UICorner", frame).CornerRadius =
-    UDim.new(0, 14)
+local corner = Instance.new("UICorner", frame)
+corner.CornerRadius = UDim.new(0, 14)
 
 local stroke = Instance.new("UIStroke", frame)
-stroke.Color = Color3.fromRGB(170, 60, 255)
+stroke.Color = Color3.fromRGB(160, 60, 255)
 stroke.Thickness = 2
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -45, 0, 42)
+title.Size = UDim2.new(1, -50, 0, 42)
 title.BackgroundTransparency = 1
-title.Text = "⚽ NEON TURBO V3"
+title.Text = "⚽ NEON TURBO V2"
 title.TextColor3 = Color3.fromRGB(210, 150, 255)
+title.TextSize = 19
 title.Font = Enum.Font.GothamBold
-title.TextSize = 18
 title.Parent = frame
 
 local close = Instance.new("TextButton")
 close.Size = UDim2.fromOffset(35, 32)
 close.Position = UDim2.new(1, -40, 0, 5)
 close.Text = "X"
-close.TextColor3 = Color3.new(1,1,1)
-close.BackgroundColor3 = Color3.fromRGB(120,35,180)
+close.TextColor3 = Color3.new(1, 1, 1)
+close.BackgroundColor3 = Color3.fromRGB(120, 35, 180)
 close.Parent = frame
 
 local mini = Instance.new("TextButton")
-mini.Size = UDim2.fromOffset(48,48)
-mini.Position = UDim2.new(0,15,0.5,-24)
+mini.Size = UDim2.fromOffset(48, 48)
+mini.Position = UDim2.new(0, 15, 0.5, -24)
 mini.Text = "⚽"
 mini.TextSize = 24
 mini.Visible = false
-mini.BackgroundColor3 = Color3.fromRGB(100,30,170)
-mini.TextColor3 = Color3.new(1,1,1)
+mini.BackgroundColor3 = Color3.fromRGB(100, 30, 170)
+mini.TextColor3 = Color3.new(1, 1, 1)
 mini.Parent = gui
 
-Instance.new("UICorner", close)
-Instance.new("UICorner", mini)
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -16, 0, 30)
+status.Position = UDim2.new(0, 8, 1, -32)
+status.BackgroundTransparency = 1
+status.Text = "NEON TURBO READY"
+status.TextColor3 = Color3.fromRGB(190, 160, 220)
+status.TextSize = 11
+status.Font = Enum.Font.Gotham
+status.Parent = frame
+
+local names = {
+    "Auto Score",
+    "Auto Save",
+    "Auto Air-Dribble",
+    "Ball Tracker",
+    "Ball Prediction",
+    "Landing Predictor"
+}
+
+local function addToggle(name, index)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -24, 0, 39)
+    button.Position = UDim2.new(0, 12, 0, 48 + (index - 1) * 44)
+    button.BackgroundColor3 = Color3.fromRGB(48, 30, 68)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 13
+    button.Parent = frame
+
+    local function update()
+        button.Text = name .. ": " ..
+            (toggles[name] and "ON" or "OFF")
+
+        button.BackgroundColor3 = toggles[name]
+            and Color3.fromRGB(115, 40, 190)
+            or Color3.fromRGB(48, 30, 68)
+    end
+
+    button.MouseButton1Click:Connect(function()
+        toggles[name] = not toggles[name]
+        update()
+
+        if name == "Auto Score"
+            or name == "Auto Save"
+            or name == "Auto Air-Dribble" then
+            status.Text = name .. " is a placeholder"
+        else
+            status.Text = name ..
+                (toggles[name] and " enabled" or " disabled")
+        end
+    end)
+
+    update()
+end
+
+for i, name in ipairs(names) do
+    addToggle(name, i)
+end
 
 close.MouseButton1Click:Connect(function()
     frame.Visible = false
@@ -81,62 +152,7 @@ mini.MouseButton1Click:Connect(function()
     mini.Visible = false
 end)
 
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1,-16,0,28)
-status.Position = UDim2.new(0,8,1,-31)
-status.BackgroundTransparency = 1
-status.Text = "Searching for ball..."
-status.TextColor3 = Color3.fromRGB(190,160,220)
-status.Font = Enum.Font.Gotham
-status.TextSize = 11
-status.Parent = frame
-
--- Independent switches
-local toggles = {
-    ["Ball Tracker"] = false,
-    ["Ball Prediction"] = false,
-    ["Landing Predictor"] = false
-}
-
-local names = {
-    "Ball Tracker",
-    "Ball Prediction",
-    "Landing Predictor"
-}
-
-for i, name in ipairs(names) do
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1,-24,0,43)
-    button.Position = UDim2.new(0,12,0,49+(i-1)*49)
-    button.BackgroundColor3 = Color3.fromRGB(55,35,75)
-    button.TextColor3 = Color3.new(1,1,1)
-    button.Font = Enum.Font.GothamBold
-    button.TextSize = 13
-    button.Parent = frame
-
-    Instance.new("UICorner",button)
-
-    local function update()
-        button.Text = name .. " : " ..
-            (toggles[name] and "ON" or "OFF")
-
-        button.BackgroundColor3 = toggles[name]
-            and Color3.fromRGB(115,40,190)
-            or Color3.fromRGB(55,35,75)
-    end
-
-    button.MouseButton1Click:Connect(function()
-        toggles[name] = not toggles[name]
-        update()
-    end)
-
-    update()
-end
-
--- Find ball
-local ball = nil
-local scanTimer = 0
-
+-- Find the ball
 local function findBall()
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("BasePart") then
@@ -153,235 +169,257 @@ local function findBall()
     return nil
 end
 
--- Ball tracker label
-local ballLabel = Instance.new("BillboardGui")
-ballLabel.Name = "NeonBallLabel"
-ballLabel.Size = UDim2.fromOffset(150,38)
-ballLabel.StudsOffset = Vector3.new(0,3,0)
-ballLabel.AlwaysOnTop = true
-ballLabel.Enabled = false
-ballLabel.Parent = gui
+-- Create visual objects
+local visuals = Instance.new("Folder")
+visuals.Name = "NeonTrajectory"
+visuals.Parent = Workspace
 
-local ballText = Instance.new("TextLabel")
-ballText.Size = UDim2.fromScale(1,1)
-ballText.BackgroundTransparency = 1
-ballText.Text = "⚽ BALL"
-ballText.TextColor3 = Color3.fromRGB(220,160,255)
-ballText.TextStrokeTransparency = 0
-ballText.Font = Enum.Font.GothamBold
-ballText.TextSize = 17
-ballText.Parent = ballLabel
+local predictionParts = {}
 
--- Purple prediction sphere
-local prediction = Instance.new("Part")
-prediction.Name = "NeonPredictionV3"
-prediction.Shape = Enum.PartType.Ball
-prediction.Size = Vector3.new(1.8,1.8,1.8)
-prediction.Anchored = true
-prediction.CanCollide = false
-prediction.CastShadow = false
-prediction.Material = Enum.Material.Neon
-prediction.Color = Color3.fromRGB(190,60,255)
-prediction.Transparency = 1
-prediction.Parent = Workspace
+for i = 1, 24 do
+    local part = Instance.new("Part")
+    part.Name = "TrajectorySegment"
+    part.Anchored = true
+    part.CanCollide = false
+    part.CanTouch = false
+    part.CanQuery = false
+    part.Material = Enum.Material.Neon
+    part.Color = Color3.fromRGB(170, 65, 255)
+    part.Size = Vector3.new(0.17, 0.17, 1)
+    part.Transparency = 1
+    part.Parent = visuals
 
--- Trajectory line
-local lineStart = Instance.new("Attachment")
-local lineEnd = Instance.new("Attachment")
-lineEnd.Parent = prediction
-
-local beam = Instance.new("Beam")
-beam.Name = "NeonTrajectoryLine"
-beam.Attachment0 = lineStart
-beam.Attachment1 = lineEnd
-beam.FaceCamera = true
-beam.Width0 = 0.3
-beam.Width1 = 0.12
-beam.LightEmission = 1
-beam.Color = ColorSequence.new(
-    Color3.fromRGB(190,60,255),
-    Color3.fromRGB(60,180,255)
-)
-beam.Enabled = false
-beam.Parent = prediction
-
--- Separate green landing ring
-local landing = Instance.new("Part")
-landing.Name = "NeonLandingV3"
-landing.Shape = Enum.PartType.Cylinder
-landing.Size = Vector3.new(0.18,7,7)
-landing.Anchored = true
-landing.CanCollide = false
-landing.CastShadow = false
-landing.Material = Enum.Material.Neon
-landing.Color = Color3.fromRGB(50,255,180)
-landing.Transparency = 1
-landing.Parent = Workspace
-
-local landingLabel = Instance.new("BillboardGui")
-landingLabel.Size = UDim2.fromOffset(130,30)
-landingLabel.AlwaysOnTop = true
-landingLabel.Enabled = false
-landingLabel.Parent = landing
-
-local landingText = Instance.new("TextLabel")
-landingText.Size = UDim2.fromScale(1,1)
-landingText.BackgroundTransparency = 1
-landingText.Text = "LANDING"
-landingText.TextColor3 = Color3.fromRGB(50,255,180)
-landingText.TextStrokeTransparency = 0
-landingText.Font = Enum.Font.GothamBold
-landingText.TextSize = 14
-landingText.Parent = landingLabel
-
-local function hidePrediction()
-    prediction.Transparency = 1
-    beam.Enabled = false
+    predictionParts[i] = part
 end
 
-local function hideLanding()
-    landing.Transparency = 1
-    landingLabel.Enabled = false
-end
+-- Purple predicted future position
+local predictionMarker = Instance.new("Part")
+predictionMarker.Name = "NeonBallPrediction"
+predictionMarker.Shape = Enum.PartType.Ball
+predictionMarker.Size = Vector3.new(1.4, 1.4, 1.4)
+predictionMarker.Anchored = true
+predictionMarker.CanCollide = false
+predictionMarker.CanTouch = false
+predictionMarker.CanQuery = false
+predictionMarker.Material = Enum.Material.Neon
+predictionMarker.Color = Color3.fromRGB(190, 60, 255)
+predictionMarker.Transparency = 1
+predictionMarker.Parent = visuals
 
-local function getGround(position, currentBall)
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
+-- Green landing circle
+local landingCircle = Instance.new("Part")
+landingCircle.Name = "NeonLandingCircle"
+landingCircle.Shape = Enum.PartType.Cylinder
+landingCircle.Size = Vector3.new(0.15, 9, 9)
+landingCircle.Anchored = true
+landingCircle.CanCollide = false
+landingCircle.CanTouch = false
+landingCircle.CanQuery = false
+landingCircle.Material = Enum.Material.Neon
+landingCircle.Color = Color3.fromRGB(40, 255, 110)
+landingCircle.Transparency = 1
+landingCircle.Parent = visuals
 
-    local excluded = {currentBall, prediction, landing}
+-- Tracker label
+local tracker = Instance.new("BillboardGui")
+tracker.Name = "NeonBallTracker"
+tracker.Size = UDim2.fromOffset(160, 40)
+tracker.StudsOffset = Vector3.new(0, 3, 0)
+tracker.AlwaysOnTop = true
+tracker.Enabled = false
+tracker.Parent = gui
+
+local trackerText = Instance.new("TextLabel")
+trackerText.Size = UDim2.fromScale(1, 1)
+trackerText.BackgroundTransparency = 1
+trackerText.Text = "⚽ BALL"
+trackerText.TextColor3 = Color3.fromRGB(255, 255, 255)
+trackerText.TextStrokeTransparency = 0
+trackerText.TextSize = 17
+trackerText.Font = Enum.Font.GothamBold
+trackerText.Parent = tracker
+
+-- Raycast settings
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function getGround(position, ball)
+    local excluded = {ball}
 
     if player.Character then
-        table.insert(excluded,player.Character)
+        table.insert(excluded, player.Character)
     end
 
-    params.FilterDescendantsInstances = excluded
+    rayParams.FilterDescendantsInstances = excluded
 
-    return Workspace:Raycast(
-        position + Vector3.new(0,100,0),
-        Vector3.new(0,-1000,0),
-        params
+    local origin = position + Vector3.new(0, 150, 0)
+    local direction = Vector3.new(0, -1200, 0)
+
+    local result = Workspace:Raycast(
+        origin,
+        direction,
+        rayParams
     )
+
+    if result then
+        return result.Position
+    end
+
+    return nil
 end
 
--- Main update
-local connection
+-- Calculate approximate time until landing
+local function getLandingTime(ball, groundPosition)
+    local gravity = math.max(Workspace.Gravity, 1)
+    local height = ball.Position.Y - groundPosition.Y
+    local velocityY = ball.AssemblyLinearVelocity.Y
 
-connection = RunService.Heartbeat:Connect(function(dt)
-    scanTimer += dt
-
-    if scanTimer >= 0.5 then
-        scanTimer = 0
-
-        if not ball or not ball.Parent then
-            ball = findBall()
-        end
+    if height <= 0.15 then
+        return 0.8
     end
 
-    if not ball or not ball.Parent then
-        ballLabel.Enabled = false
-        hidePrediction()
-        hideLanding()
-        status.Text = "Ball not found"
-        return
+    local discriminant =
+        velocityY * velocityY + 2 * gravity * height
+
+    if discriminant < 0 then
+        return 1.5
     end
 
-    local position = ball.Position
+    local time =
+        (velocityY + math.sqrt(discriminant)) / gravity
+
+    if time <= 0 then
+        return 0.8
+    end
+
+    return math.clamp(time, 0.05, 8)
+end
+
+local function calculatePosition(ball, time)
     local velocity = ball.AssemblyLinearVelocity
     local gravity = Workspace.Gravity
 
-    local radius = math.max(
-        ball.Size.X,
-        ball.Size.Y,
-        ball.Size.Z
-    ) / 2
+    return ball.Position
+        + velocity * time
+        + Vector3.new(0, -0.5 * gravity * time * time, 0)
+end
 
-    -- 1. BALL TRACKER
+-- Update visuals
+local updateTimer = 0
+
+local connection
+connection = RunService.Heartbeat:Connect(function(dt)
+    updateTimer += dt
+
+    if updateTimer < 0.025 then
+        return
+    end
+
+    updateTimer = 0
+
+    local ball = findBall()
+
+    if not ball then
+        tracker.Enabled = false
+        predictionMarker.Transparency = 1
+        landingCircle.Transparency = 1
+
+        for _, part in ipairs(predictionParts) do
+            part.Transparency = 1
+        end
+
+        status.Text = "Waiting for ball..."
+        return
+    end
+
+    -- Ball tracker
     if toggles["Ball Tracker"] then
-        ballLabel.Adornee = ball
-        ballLabel.Enabled = true
+        tracker.Adornee = ball
+        tracker.Enabled = true
+        trackerText.Text = "⚽ BALL  |  " ..
+            math.floor(ball.AssemblyLinearVelocity.Magnitude)
     else
-        ballLabel.Enabled = false
+        tracker.Enabled = false
     end
 
-    -- 2. BALL PREDICTION + LINE
-    if toggles["Ball Prediction"] then
-        local t = 0.65
+    local groundPosition = getGround(ball.Position, ball)
 
-        local future = position
-            + velocity*t
-            + Vector3.new(0,-0.5*gravity*t*t,0)
+    if not groundPosition then
+        landingCircle.Transparency = 1
 
-        prediction.Position = future
-        prediction.Transparency = 0.2
-
-        if lineStart.Parent ~= ball then
-            lineStart.Parent = ball
+        for _, part in ipairs(predictionParts) do
+            part.Transparency = 1
         end
 
-        beam.Enabled = true
-    else
-        hidePrediction()
+        return
     end
 
-    -- 3. LANDING PREDICTOR
+    local landingTime = getLandingTime(ball, groundPosition)
+
+    -- Landing prediction
     if toggles["Landing Predictor"] then
-        local ground = getGround(position,ball)
+        local landingPosition =
+            calculatePosition(ball, landingTime)
 
-        if ground then
-            local targetY = ground.Position.Y + radius
-            local height = position.Y - targetY
+        local groundAtLanding =
+            getGround(landingPosition, ball)
 
-            local discriminant =
-                velocity.Y*velocity.Y + 2*gravity*height
+        if groundAtLanding then
+            landingCircle.CFrame =
+                CFrame.new(
+                    groundAtLanding + Vector3.new(0, 0.12, 0)
+                ) * CFrame.Angles(0, 0, math.rad(90))
 
-            if height > 0.2 and discriminant >= 0 then
-                local fallTime =
-                    (velocity.Y + math.sqrt(discriminant))
-                    / gravity
-
-                if fallTime > 0.08 and fallTime < 15 then
-                    local projected = position + Vector3.new(
-                        velocity.X*fallTime,
-                        0,
-                        velocity.Z*fallTime
-                    )
-
-                    local landingGround = getGround(
-                        projected + Vector3.new(0,20,0),
-                        ball
-                    )
-
-                    local groundY = landingGround
-                        and landingGround.Position.Y
-                        or ground.Position.Y
-
-                    local finalPosition = Vector3.new(
-                        projected.X,
-                        groundY + 0.12,
-                        projected.Z
-                    )
-
-                    landing.CFrame =
-                        CFrame.new(finalPosition)
-                        * CFrame.Angles(0,0,math.rad(90))
-
-                    landing.Transparency = 0.2
-                    landingLabel.Enabled = true
-                else
-                    hideLanding()
-                end
-            else
-                hideLanding()
-            end
+            landingCircle.Transparency = 0.12
         else
-            hideLanding()
+            landingCircle.Transparency = 1
         end
     else
-        hideLanding()
+        landingCircle.Transparency = 1
     end
 
-    status.Text = "Ball found | Speed: " ..
-        math.floor(velocity.Magnitude)
+    -- Curved ball trajectory
+    if toggles["Ball Prediction"] then
+        local flightTime = math.min(landingTime, 3.5)
+        local previousPosition = ball.Position
+
+        for i = 1, #predictionParts do
+            local t = flightTime * (i / #predictionParts)
+            local nextPosition = calculatePosition(ball, t)
+
+            local part = predictionParts[i]
+            local difference = nextPosition - previousPosition
+            local length = difference.Magnitude
+
+            if length > 0.01 then
+                part.Size = Vector3.new(0.17, 0.17, length)
+                part.CFrame = CFrame.lookAt(
+                    (previousPosition + nextPosition) / 2,
+                    nextPosition
+                )
+                part.Transparency = 0.08
+            else
+                part.Transparency = 1
+            end
+
+            previousPosition = nextPosition
+        end
+
+        local endPosition =
+            calculatePosition(ball, flightTime)
+
+        predictionMarker.Position = endPosition
+        predictionMarker.Transparency = 0.2
+    else
+        predictionMarker.Transparency = 1
+
+        for _, part in ipairs(predictionParts) do
+            part.Transparency = 1
+        end
+    end
+
+    status.Text = "Ball speed: " ..
+        math.floor(ball.AssemblyLinearVelocity.Magnitude)
 end)
 
-print("NEON TURBO SOCCER V3 LOADED")
+print("NEON TURBO SOCCER V2 LOADED!")
